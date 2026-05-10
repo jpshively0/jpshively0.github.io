@@ -201,7 +201,7 @@ export default function HerdMap({ animals }: Props) {
 
       {selectedAnimal && selectedHistory && (
         <div
-          className="absolute z-30 max-h-[min(420px,calc(100%-32px))] w-80 overflow-y-auto rounded-lg border border-white/15 bg-slate-950/95 p-4 text-sm shadow-2xl shadow-black/40 backdrop-blur-2xl"
+          className="absolute z-50 max-h-[min(420px,calc(100%-32px))] w-80 overflow-y-auto rounded-lg border border-white/15 bg-slate-950/95 p-4 text-sm shadow-2xl shadow-black/40 backdrop-blur-2xl"
           onMouseEnter={clearCloseTimer}
           onMouseLeave={scheduleAnimalCardClose}
           style={{

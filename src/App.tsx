@@ -478,12 +478,12 @@ export default function App() {
             status,
             behavior: isCompromised ? (nextHealth < 45 ? "slow" : "isolating") : "clustered",
             isolation: isCompromised ? Math.min(1, animal.isolation + 0.0007) : Math.max(0, animal.isolation - 0.0015),
-            lastMovement: distanceMoved,
+            lastMovement: animal.lastMovement * 0.8 + distanceMoved * 0.2,
           };
         }),
       );
 
-    }, 550);
+    }, 2500);
 
     return () => clearInterval(interval);
 
