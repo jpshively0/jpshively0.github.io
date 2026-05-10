@@ -201,7 +201,7 @@ export default function CameraFeed({ animals }: Props) {
         <div className="absolute left-5 top-5 max-w-[min(420px,calc(100%-2.5rem))] rounded-lg border border-white/10 bg-slate-950/72 p-4 backdrop-blur-xl">
           <div className="flex flex-wrap items-center gap-2">
             <span className="rounded border border-cyan-300/20 bg-cyan-300/10 px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.22em] text-cyan-100">
-              Camera Intelligence
+              Camera Motion
             </span>
             <span className={`rounded border border-white/10 bg-white/10 px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] ${riskTone}`}>
               {cameraRisk}

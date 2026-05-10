@@ -87,7 +87,7 @@ export default function Topbar({ animals, dataSourceLabel = "Simulation Mode", t
 
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <StatCard
-          detail="AI welfare index"
+          detail="Telemetry risk score"
           icon="%"
           title="Herd Welfare"
           tone={avgHealth < 70 ? "amber" : "emerald"}
@@ -103,7 +103,7 @@ export default function Topbar({ animals, dataSourceLabel = "Simulation Mode", t
         />
 
         <StatCard
-          detail="Predictive simulation"
+          detail="Rule-based estimate"
           icon="R"
           title="Outbreak Risk"
           tone={outbreakRisk === "High" ? "red" : outbreakRisk === "Medium" ? "amber" : "emerald"}

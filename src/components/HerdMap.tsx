@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 
 import type { Animal } from "../App";
 
@@ -45,6 +45,7 @@ function getMedicalHistory(animal: Animal) {
 }
 
 export default function HerdMap({ animals }: Props) {
+  const closeTimerRef = useRef<number | null>(null);
   const [selectedAnimal, setSelectedAnimal] = useState<Animal | null>(null);
   const selectedHistory = selectedAnimal ? getMedicalHistory(selectedAnimal) : null;
   const healthyCount = animals.filter(animal => animal.status === "healthy").length;
@@ -59,6 +60,26 @@ export default function HerdMap({ animals }: Props) {
         { x: 0, y: 0 },
       )
     : { x: 50, y: 50 };
+
+  function clearCloseTimer() {
+    if (closeTimerRef.current !== null) {
+      window.clearTimeout(closeTimerRef.current);
+      closeTimerRef.current = null;
+    }
+  }
+
+  function openAnimalCard(animal: Animal) {
+    clearCloseTimer();
+    setSelectedAnimal(animal);
+  }
+
+  function scheduleAnimalCardClose() {
+    clearCloseTimer();
+    closeTimerRef.current = window.setTimeout(() => {
+      setSelectedAnimal(null);
+      closeTimerRef.current = null;
+    }, 350);
+  }
 
   return (
     <div className="relative h-full min-h-[360px] overflow-hidden rounded-lg border border-cyan-200/10 bg-[#07111d]/90 shadow-2xl shadow-black/35 backdrop-blur-2xl xl:min-h-0">
@@ -154,8 +175,8 @@ export default function HerdMap({ animals }: Props) {
           className={`group absolute z-20 h-4 w-4 -translate-x-1/2 -translate-y-1/2 rounded-full border border-white/55 shadow-lg transition-all duration-200 hover:z-30 hover:scale-150 ${
             animal.status === "critical" ? "animate-pulse" : ""
           }`}
-          onMouseEnter={() => setSelectedAnimal(animal)}
-          onMouseLeave={() => setSelectedAnimal(null)}
+          onMouseEnter={() => openAnimalCard(animal)}
+          onMouseLeave={scheduleAnimalCardClose}
           style={{
             left: `${animal.x}%`,
             top: `${animal.y}%`,
@@ -180,12 +201,14 @@ export default function HerdMap({ animals }: Props) {
 
       {selectedAnimal && selectedHistory && (
         <div
-          className="pointer-events-none absolute z-30 max-h-[min(420px,calc(100%-32px))] w-80 overflow-y-auto rounded-lg border border-white/15 bg-slate-950/95 p-4 text-sm shadow-2xl shadow-black/40 backdrop-blur-2xl"
+          className="absolute z-30 max-h-[min(420px,calc(100%-32px))] w-80 overflow-y-auto rounded-lg border border-white/15 bg-slate-950/95 p-4 text-sm shadow-2xl shadow-black/40 backdrop-blur-2xl"
+          onMouseEnter={clearCloseTimer}
+          onMouseLeave={scheduleAnimalCardClose}
           style={{
-            left: selectedAnimal.x > 68 ? "auto" : `calc(${selectedAnimal.x}% + 18px)`,
-            right: selectedAnimal.x > 68 ? `calc(${100 - selectedAnimal.x}% + 18px)` : "auto",
-            top: selectedAnimal.y > 58 ? "auto" : `calc(${selectedAnimal.y}% + 18px)`,
-            bottom: selectedAnimal.y > 58 ? `calc(${100 - selectedAnimal.y}% + 18px)` : "auto",
+            left: selectedAnimal.x > 68 ? "auto" : `calc(${selectedAnimal.x}% + 10px)`,
+            right: selectedAnimal.x > 68 ? `calc(${100 - selectedAnimal.x}% + 10px)` : "auto",
+            top: selectedAnimal.y > 58 ? "auto" : `calc(${selectedAnimal.y}% + 10px)`,
+            bottom: selectedAnimal.y > 58 ? `calc(${100 - selectedAnimal.y}% + 10px)` : "auto",
           }}
         >
           <div className="flex items-start justify-between gap-3">
@@ -238,10 +261,10 @@ export default function HerdMap({ animals }: Props) {
             </div>
           </div>
 
-          {selectedAnimal.dataSource === "farmer_csv" && (
+          {selectedAnimal.dataSource !== "simulation" && (
             <div className="mt-4 rounded-lg border border-emerald-300/15 bg-emerald-300/5 p-3">
               <p className="text-xs uppercase tracking-[0.18em] text-slate-500">
-                Imported Telemetry
+                Telemetry
               </p>
               <div className="mt-3 grid grid-cols-2 gap-3 text-xs">
                 <div>
@@ -274,6 +297,35 @@ export default function HerdMap({ animals }: Props) {
                   {selectedAnimal.vetNotes}
                 </p>
               )}
+            </div>
+          )}
+
+          {selectedAnimal.scoreFactors && selectedAnimal.scoreFactors.length > 0 && (
+            <div className="mt-4 rounded-lg border border-white/10 bg-white/5 p-3">
+              <p className="text-xs uppercase tracking-[0.18em] text-slate-500">
+                Score Breakdown
+              </p>
+              <div className="mt-3 space-y-2">
+                {selectedAnimal.scoreFactors.map(factor => (
+                  <div className="flex items-center justify-between gap-3 text-xs" key={factor.label}>
+                    <div>
+                      <p className="font-medium text-slate-200">{factor.label}</p>
+                      <p className="mt-0.5 text-slate-500">{factor.value}</p>
+                    </div>
+                    <span
+                      className={`rounded-full px-2 py-1 font-semibold ${
+                        factor.status === "critical"
+                          ? "bg-red-400/15 text-red-200"
+                          : factor.status === "warning"
+                          ? "bg-amber-400/15 text-amber-200"
+                          : "bg-emerald-400/15 text-emerald-200"
+                      }`}
+                    >
+                      {factor.impact > 0 ? `-${factor.impact}` : "OK"}
+                    </span>
+                  </div>
+                ))}
+              </div>
             </div>
           )}
 

@@ -26,6 +26,7 @@ export interface Animal {
   lastReading?: string;
   vetNotes?: string;
   dataSource?: "simulation" | "farmer_csv" | "live_feed";
+  scoreFactors?: ScoreFactor[];
 }
 
 export interface AnalyticsPoint {
@@ -43,6 +44,15 @@ export interface Alert {
   severity: "warning" | "critical";
   health: number;
   metric: string;
+  reasons: string[];
+  recommendation: string;
+}
+
+export interface ScoreFactor {
+  label: string;
+  value: string;
+  impact: number;
+  status: "normal" | "warning" | "critical";
 }
 
 export type View = "overview" | "monitoring" | "camera" | "analytics" | "alerts" | "settings";
@@ -71,11 +81,20 @@ interface TelemetryRecord {
 const viewTitles: Record<View, string> = {
   overview: "Command Overview",
   monitoring: "Herd Monitoring",
-  camera: "Camera Intelligence",
+  camera: "Camera Motion",
   analytics: "Analytics",
   alerts: "Alert Center",
   settings: "Settings",
 };
+
+const sampleCsv = [
+  "animalId,timestamp,temperature,heartRate,activityLevel,ruminationMinutes,x,y,vetNotes",
+  "5,2026-05-10T08:30:00Z,39.8,91,24,218,78,32,Sustained low activity and elevated temperature",
+  "17,2026-05-10T08:30:00Z,39.3,86,31,271,74,27,Separated from primary group",
+  "29,2026-05-10T08:30:00Z,38.5,67,62,410,68,71,Normal follow-up",
+  "34,2026-05-10T08:30:00Z,38.4,64,72,438,45,49,Normal telemetry",
+  "41,2026-05-10T08:30:00Z,37.4,52,39,298,52,57,Low rumination watch",
+].join("\n");
 
 function clamp(value: number, min: number, max: number) {
   return Math.max(min, Math.min(max, value));
@@ -120,7 +139,7 @@ function parseCsvLine(line: string) {
   return cells;
 }
 
-function calculateHealthScore({
+function calculateHealthAssessment({
   activityLevel,
   heartRate,
   ruminationMinutes,
@@ -132,37 +151,72 @@ function calculateHealthScore({
   temperature?: number;
 }) {
   let score = 100;
+  const factors: ScoreFactor[] = [];
 
   if (temperature !== undefined) {
-    score -= Math.max(0, temperature - 39.1) * 22;
-    score -= Math.max(0, 37.6 - temperature) * 10;
+    const highImpact = Math.max(0, temperature - 39.1) * 22;
+    const lowImpact = Math.max(0, 37.6 - temperature) * 10;
+    const impact = highImpact + lowImpact;
+    score -= impact;
+    factors.push({
+      label: "Temperature",
+      value: `${temperature.toFixed(1)} C`,
+      impact: Math.round(impact),
+      status: impact > 14 ? "critical" : impact > 0 ? "warning" : "normal",
+    });
   }
 
   if (heartRate !== undefined) {
-    score -= Math.max(0, heartRate - 82) * 0.55;
-    score -= Math.max(0, 48 - heartRate) * 0.45;
+    const highImpact = Math.max(0, heartRate - 82) * 0.55;
+    const lowImpact = Math.max(0, 48 - heartRate) * 0.45;
+    const impact = highImpact + lowImpact;
+    score -= impact;
+    factors.push({
+      label: "Heart rate",
+      value: `${heartRate.toFixed(0)} bpm`,
+      impact: Math.round(impact),
+      status: impact > 8 ? "critical" : impact > 0 ? "warning" : "normal",
+    });
   }
 
   if (activityLevel !== undefined) {
-    score -= Math.max(0, 45 - activityLevel) * 0.72;
+    const impact = Math.max(0, 45 - activityLevel) * 0.72;
+    score -= impact;
+    factors.push({
+      label: "Activity",
+      value: activityLevel.toFixed(0),
+      impact: Math.round(impact),
+      status: impact > 12 ? "critical" : impact > 0 ? "warning" : "normal",
+    });
   }
 
   if (ruminationMinutes !== undefined) {
-    score -= Math.max(0, 320 - ruminationMinutes) * 0.08;
+    const impact = Math.max(0, 320 - ruminationMinutes) * 0.08;
+    score -= impact;
+    factors.push({
+      label: "Rumination",
+      value: `${ruminationMinutes.toFixed(0)} min`,
+      impact: Math.round(impact),
+      status: impact > 9 ? "critical" : impact > 0 ? "warning" : "normal",
+    });
   }
 
-  return clamp(Math.round(score), 8, 100);
+  return {
+    factors,
+    score: clamp(Math.round(score), 8, 100),
+  };
 }
 
 function animalFromTelemetry(record: TelemetryRecord, previous?: Animal) {
   const x = clamp(record.x ?? previous?.x ?? 35 + ((record.animalId * 7) % 42), 5, 94);
   const y = clamp(record.y ?? previous?.y ?? 28 + ((record.animalId * 11) % 44), 6, 92);
-  const health = calculateHealthScore({
+  const assessment = calculateHealthAssessment({
     activityLevel: record.activityLevel,
     heartRate: record.heartRate,
     ruminationMinutes: record.ruminationMinutes,
     temperature: record.temperature,
   });
+  const health = assessment.score;
   const status = statusFromHealth(health);
   const isolation = clamp(Math.hypot(x - 49, y - 49) / 58, 0, 1);
   const movement = previous ? Math.hypot(x - previous.x, y - previous.y) : clamp((record.activityLevel ?? 55) / 100, 0.02, 1);
@@ -185,7 +239,43 @@ function animalFromTelemetry(record: TelemetryRecord, previous?: Animal) {
     lastReading: record.timestamp,
     vetNotes: record.vetNotes,
     dataSource: "live_feed",
+    scoreFactors: assessment.factors,
   } satisfies Animal;
+}
+
+function getTopRiskFactors(animal: Animal) {
+  const telemetryFactors = animal.scoreFactors
+    ?.filter(factor => factor.status !== "normal" && factor.impact > 0)
+    .sort((a, b) => b.impact - a.impact)
+    .map(factor => `${factor.label}: ${factor.value} (-${factor.impact})`) ?? [];
+
+  const behaviorFactors = [
+    animal.isolation > 0.72 ? `Isolation index ${animal.isolation.toFixed(2)}` : undefined,
+    animal.lastMovement < 0.07 ? `Low movement ${animal.lastMovement.toFixed(2)}` : undefined,
+    animal.health < 72 ? `Welfare score ${animal.health.toFixed(0)}%` : undefined,
+  ].filter((factor): factor is string => Boolean(factor));
+
+  return [...telemetryFactors, ...behaviorFactors].slice(0, 4);
+}
+
+function recommendationForAnimal(animal: Animal) {
+  if (animal.health < 42) {
+    return "Prioritize immediate inspection and separate from the main group if symptoms are confirmed.";
+  }
+
+  if (animal.scoreFactors?.some(factor => factor.label === "Temperature" && factor.status !== "normal")) {
+    return "Check temperature manually, hydration, and appetite at the next handling window.";
+  }
+
+  if (animal.lastMovement < 0.07 || (animal.activityLevel !== undefined && animal.activityLevel < 35)) {
+    return "Observe gait and willingness to move before escalating.";
+  }
+
+  if (animal.isolation > 0.72) {
+    return "Confirm whether isolation is environmental or a sustained behavioral change.";
+  }
+
+  return "Review telemetry trend before escalating.";
 }
 
 function createMockLiveTelemetry(previousAnimals: Animal[]) {
@@ -447,6 +537,7 @@ export default function App() {
       .slice(0, 6)
       .map(animal => {
         const severity = animal.health < 42 ? "critical" : "warning";
+        const reasons = getTopRiskFactors(animal);
         const title =
           animal.health < 42
             ? "Critical welfare degradation"
@@ -464,8 +555,8 @@ export default function App() {
           title,
           message:
             severity === "critical"
-              ? "AI simulation flags rapid health decline and isolation from the primary herd."
-              : "Telemetry pattern deviates from the herd baseline and should be reviewed.",
+              ? "Telemetry scoring shows a high-priority welfare risk requiring human review."
+              : "Telemetry scoring shows one or more values outside the expected range.",
           severity,
           health: animal.health,
           metric:
@@ -474,6 +565,8 @@ export default function App() {
               : animal.isolation > 0.72
               ? `${animal.isolation.toFixed(2)} isolation`
               : "Low motion",
+          reasons: reasons.length ? reasons : ["No individual sensor value supplied; flagged from movement and map behavior."],
+          recommendation: recommendationForAnimal(animal),
         };
       });
   }, [animals]);
@@ -520,6 +613,17 @@ export default function App() {
     };
 
     reader.readAsText(file);
+  }
+
+  function downloadSampleCsv() {
+    const blob = new Blob([sampleCsv], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+
+    link.href = url;
+    link.download = "herdsense-sample-telemetry.csv";
+    link.click();
+    URL.revokeObjectURL(url);
   }
 
   function startLiveFeedDemo() {
@@ -623,7 +727,7 @@ export default function App() {
         <div className="min-h-0 overflow-y-auto p-4">
           <div className="grid gap-3">
             {alerts.map(alert => (
-              <div className="grid gap-3 rounded-lg border border-white/10 bg-slate-950/45 p-4 md:grid-cols-[120px_1fr_120px]" key={alert.id}>
+              <div className="grid gap-3 rounded-lg border border-white/10 bg-slate-950/45 p-4 md:grid-cols-[120px_1fr_150px]" key={alert.id}>
                 <div>
                   <p className="text-xs text-slate-500">Animal</p>
                   <p className="mt-1 font-semibold">#{alert.animalId}</p>
@@ -631,6 +735,14 @@ export default function App() {
                 <div>
                   <p className="font-semibold">{alert.title}</p>
                   <p className="mt-1 text-sm text-slate-400">{alert.message}</p>
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    {alert.reasons.map(reason => (
+                      <span className="rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-xs text-slate-300" key={reason}>
+                        {reason}
+                      </span>
+                    ))}
+                  </div>
+                  <p className="mt-3 text-xs leading-5 text-cyan-100">{alert.recommendation}</p>
                 </div>
                 <div className="md:text-right">
                   <p className={alert.severity === "critical" ? "text-red-200" : "text-amber-200"}>
@@ -665,6 +777,13 @@ export default function App() {
               type="file"
             />
           </label>
+          <button
+            className="mt-3 w-full rounded-lg border border-white/10 bg-white/5 px-4 py-3 text-sm font-semibold text-slate-100 transition hover:border-cyan-200/30 hover:bg-white/10"
+            onClick={downloadSampleCsv}
+            type="button"
+          >
+            Download sample telemetry CSV
+          </button>
           {dataSource.error && (
             <p className="mt-3 rounded-lg border border-red-400/20 bg-red-400/10 p-3 text-sm text-red-100">
               {dataSource.error}
@@ -700,16 +819,19 @@ export default function App() {
 
         <GlassPanel className="p-5">
           <p className="text-xs uppercase tracking-[0.24em] text-slate-400">Scoring</p>
-          <h3 className="mt-1 text-xl font-bold">Health Model Inputs</h3>
+          <h3 className="mt-1 text-xl font-bold">Transparent Risk Score</h3>
           <div className="mt-5 space-y-3 text-sm text-slate-300">
             <div className="rounded-lg border border-white/10 bg-white/5 p-3">
-              High temperature and abnormal heart rate reduce welfare.
+              Temperature above 39.1 C or below 37.6 C reduces the score.
             </div>
             <div className="rounded-lg border border-white/10 bg-white/5 p-3">
-              Low activity and low rumination reduce welfare and trigger alerts.
+              Heart rate above 82 bpm or below 48 bpm is treated as abnormal.
             </div>
             <div className="rounded-lg border border-white/10 bg-white/5 p-3">
-              Optional x/y columns place animals on the live map.
+              Activity below 45 and rumination below 320 minutes reduce welfare.
+            </div>
+            <div className="rounded-lg border border-white/10 bg-white/5 p-3">
+              Optional x/y columns place animals on the map; isolation and low movement can also trigger alerts.
             </div>
           </div>
         </GlassPanel>
@@ -748,10 +870,10 @@ export default function App() {
             />
             <MetricRow label="Animal Count" value={String(animals.length)} />
             <MetricRow label="Scoring Inputs" value="Temp, HR, activity, rumination" tone="text-amber-200" />
-            <MetricRow label="Veterinary AI" value="Demo only" tone="text-red-200" />
+            <MetricRow label="Decision Support" value="Explainable prototype" tone="text-amber-200" />
           </div>
           <p className="mt-5 rounded-lg border border-cyan-300/15 bg-cyan-300/5 p-4 text-sm leading-6 text-slate-300">
-            These controls are presentation settings for the hackathon simulation. They are intentionally frontend-only and do not represent real veterinary recommendations.
+            This prototype ranks animals for human review. It does not diagnose disease or replace veterinary judgement.
           </p>
         </GlassPanel>
       </div>

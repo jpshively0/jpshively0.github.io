@@ -69,6 +69,23 @@ export default function AlertPanel({ alerts }: Props) {
                     {alert.metric}
                   </span>
                 </div>
+
+                <div className="mt-3 rounded-lg border border-white/10 bg-slate-950/35 p-3">
+                  <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">
+                    Evidence
+                  </p>
+                  <ul className="mt-2 space-y-1.5 text-xs text-slate-300">
+                    {alert.reasons.map(reason => (
+                      <li className="flex gap-2" key={reason}>
+                        <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-cyan-300" />
+                        {reason}
+                      </li>
+                    ))}
+                  </ul>
+                  <p className="mt-3 border-t border-white/10 pt-2 text-xs leading-5 text-cyan-100">
+                    {alert.recommendation}
+                  </p>
+                </div>
               </div>
             </div>
           </article>
@@ -78,7 +95,7 @@ export default function AlertPanel({ alerts }: Props) {
       <div className="shrink-0 border-t border-white/10 p-4 text-xs text-slate-400">
         <div className="flex items-center gap-2">
           <span className="h-2 w-2 rounded-full bg-cyan-300" />
-          Simulation-only decision support for hackathon demo use.
+          Prototype decision support. Human review required before action.
         </div>
       </div>
 
