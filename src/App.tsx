@@ -307,7 +307,7 @@ function createMockLiveTelemetry(previousAnimals: Animal[]) {
   });
 }
 
-function animalsFromCsv(csv: string) {
+function animalsFromCsv(csv: string): Animal[] {
   const lines = csv
     .split(/\r?\n/)
     .map(line => line.trim())
@@ -337,26 +337,26 @@ function animalsFromCsv(csv: string) {
     const heartRate = parseNumber(row.heartrate ?? row.hr);
     const activityLevel = parseNumber(row.activitylevel ?? row.activity);
     const ruminationMinutes = parseNumber(row.ruminationminutes ?? row.rumination);
-    return {
-      ...animalFromTelemetry({
-        animalId: id,
-        timestamp: row.timestamp ?? row.time ?? row.date ?? new Date().toISOString(),
-        temperature,
-        heartRate,
-        activityLevel,
-        ruminationMinutes,
-        x: parseNumber(row.x),
-        y: parseNumber(row.y),
-        vetNotes: row.vetnotes ?? row.notes,
-      }),
-      temperature,
-      heartRate,
-      activityLevel,
-      ruminationMinutes,
-      lastReading: row.timestamp ?? row.time ?? row.date,
-      vetNotes: row.vetnotes ?? row.notes,
-      dataSource: "farmer_csv",
-    };
+   return {
+  ...animalFromTelemetry({
+    animalId: id,
+    timestamp: row.timestamp ?? row.time ?? row.date ?? new Date().toISOString(),
+    temperature,
+    heartRate,
+    activityLevel,
+    ruminationMinutes,
+    x: parseNumber(row.x),
+    y: parseNumber(row.y),
+    vetNotes: row.vetnotes ?? row.notes,
+  }),
+  temperature,
+  heartRate,
+  activityLevel,
+  ruminationMinutes,
+  lastReading: row.timestamp ?? row.time ?? row.date,
+  vetNotes: row.vetnotes ?? row.notes,
+  dataSource: "farmer_csv",
+  } as Animal;
   });
 }
 
